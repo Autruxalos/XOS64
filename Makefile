@@ -1,24 +1,28 @@
 # =============================================================================
-# MAKEFILE INTEGRADO CON SISTEMA DE ARCHIVOS EXFS64
+# MAKEFILE INTEGRADO CON SISTEMA DE ARCHIVOS EXFS64 (CORREGIDO)
 # =============================================================================
 
 all: build/XOS64.img
 
-build/xboot.bin: src/boot/xboot64.asm
+build/xboot64.bin: src/boot/xboot64.asm
 	mkdir -p build
-	nasm -f bin src/boot/xboot64.asm -o build/xboot.bin
+	nasm -f bin src/boot/xboot64.asm -o build/xboot64.bin
 
-build/xkernel.bin: src/kernel/xkernel64.asm
+build/xkernel64.bin: src/kernel/xkernel64.asm
+	mkdir -p build
 	nasm -f bin src/kernel/xkernel64.asm -o build/xkernel64.bin
 
-build/exfs64_dir.bin: src/boot/exfs64-dir.asm
+build/exfs64-dir.bin: src/boot/exfs64-dir.asm
+	mkdir -p build
 	nasm -f bin src/boot/exfs64-dir.asm -o build/exfs64-dir.bin
 
-build/xsh.bin: src/apps/xsh64.asm
-	nasm -f bin src/apps/xsh64.asm -o build/xsh.bin
+build/xsh64.bin: src/apps/xsh64.asm
+	mkdir -p build
+	nasm -f bin src/apps/xsh64.asm -o build/xsh64.bin
 
-build/exit.bin: src/init/exit64.asm
-	nasm -f bin src/init/exit64.asm -o build/exit.bin
+build/exit64.bin: src/init/exit64.asm
+	mkdir -p build
+	nasm -f bin src/init/exit64.asm -o build/exit64.bin
 
 build/XOS64.img: build/xboot64.bin build/xkernel64.bin build/exfs64-dir.bin build/xsh64.bin build/exit64.bin
 	# 1. Forzar tamaños exactos en bloques múltiplos de 512 bytes
@@ -37,7 +41,7 @@ build/XOS64.img: build/xboot64.bin build/xkernel64.bin build/exfs64-dir.bin buil
 	cat build/xboot64.bin build/xkernel64.bin build/exfs64-dir.bin build/xsh64.bin build/exit64.bin > build/XOS64.img
 	truncate -s 10M build/XOS64.img
 
-run: build/xos64.img
+run: build/XOS64.img
 	qemu-system-x86_64 -drive format=raw,file=build/XOS64.img
 
 clean:
