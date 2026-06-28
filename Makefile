@@ -1,5 +1,5 @@
 # =============================================================================
-# MAKEFILE INTEGRADO CON SISTEMA DE ARCHIVOS EXFS64 (CORREGIDO)
+# MAKEFILE XOS64 - BLINDADO CONTRA FALLOS DE ARRANQUE MBR
 # =============================================================================
 
 all: build/XOS64.img
@@ -25,23 +25,18 @@ build/exit64.bin: src/init/exit64.asm
 	nasm -f bin src/init/exit64.asm -o build/exit64.bin
 
 build/XOS64.img: build/xboot64.bin build/xkernel64.bin build/exfs64-dir.bin build/xsh64.bin build/exit64.bin
-	# 1. Forzar tamaños exactos en bloques múltiplos de 512 bytes
-	truncate -s 512  build/xboot64.bin
+	# 1. Forzar tamaños exactos del sistema de archivos EXFS64 (Excepto el bootloader que ya mide 512)
 	truncate -s 4096 build/xkernel64.bin
 	truncate -s 512  build/exfs64-dir.bin
 	truncate -s 4096 build/xsh64.bin
 	truncate -s 512  build/exit64.bin
 	
-	# 2. Ensamblar la imagen lineal del disco (Geometría EXFS64)
-	# Sector 0: XBOOT64 (512b)
-	# Sectores 1-8: XKERNEL64 (4096b)
-	# Sector 9: Directorio EXFS64 (512b)
-	# Sectores 10-17: XSH64 (4096b)
-	# Sector 18: EXIT64 (512b)
+	# 2. Concatenar de forma lineal limpia en la imagen definitiva (XOS64.img en mayúsculas)
 	cat build/xboot64.bin build/xkernel64.bin build/exfs64-dir.bin build/xsh64.bin build/exit64.bin > build/XOS64.img
 	truncate -s 10M build/XOS64.img
 
 run: build/XOS64.img
+	# Forzar a QEMU a leer la imagen como un disco duro crudo (Raw Hard Disk)
 	qemu-system-x86_64 -drive format=raw,file=build/XOS64.img
 
 clean:
