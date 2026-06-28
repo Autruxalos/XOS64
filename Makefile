@@ -9,10 +9,10 @@ build/xboot.bin: src/boot/xboot64.asm
 	nasm -f bin src/boot/xboot64.asm -o build/xboot.bin
 
 build/xkernel.bin: src/kernel/xkernel64.asm
-	nasm -f bin src/kernel/xkernel.asm -o build/xkernel.bin
+	nasm -f bin src/kernel/xkernel64.asm -o build/xkernel64.bin
 
-build/exfs64_dir.bin: src/boot/exfs64_dir.asm
-	nasm -f bin src/boot/exfs64-dir.asm -o build/exfs64_dir.bin
+build/exfs64_dir.bin: src/boot/exfs64-dir.asm
+	nasm -f bin src/boot/exfs64-dir.asm -o build/exfs64-dir.bin
 
 build/xsh.bin: src/apps/xsh64.asm
 	nasm -f bin src/apps/xsh64.asm -o build/xsh.bin
@@ -20,7 +20,7 @@ build/xsh.bin: src/apps/xsh64.asm
 build/exit.bin: src/init/exit64.asm
 	nasm -f bin src/init/exit64.asm -o build/exit.bin
 
-build/xos64.img: build/xboot64.bin build/xkernel.bin build/exfs64_dir.bin build/xsh.bin build/exit.bin
+build/xos64.img: build/xboot64.bin build/xkernel64.bin build/exfs64-dir.bin build/xsh64.bin build/exit64.bin
 	# 1. Forzar tamaños exactos en bloques múltiplos de 512 bytes
 	truncate -s 512  build/xboot64.bin
 	truncate -s 4096 build/xkernel64.bin
