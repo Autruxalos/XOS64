@@ -196,3 +196,92 @@ temp_char    db 0, 0
 
 align 8
 cmd_buffer   times CMD_LIMIT db 0
+
+; =============================================================================
+; COMANDO: exofetch — Visor de Información del Sistema XOS64
+; =============================================================================
+
+global xsh_cmd_exofetch
+xsh_cmd_exofetch:
+    push rsi
+    push rdi
+
+    ; --- LÍNEA 1: ARTE + ARQUITECTURA ---
+    mov rsi, fetch_ascii_01
+    mov bl, 0x0B                ; Cyan para el arte
+    call xk_print
+    mov rsi, fetch_lbl_arch
+    mov bl, 0x0F                ; Blanco para las etiquetas
+    call xk_print
+
+    ; --- LÍNEA 2: ARTE + ANCHO DE BUS ---
+    mov rsi, fetch_ascii_02
+    mov bl, 0x0B
+    call xk_print
+    mov rsi, fetch_lbl_bus
+    mov bl, 0x0F
+    call xk_print
+
+    ; --- LÍNEA 3: ARTE + GRÁFICOS ---
+    mov rsi, fetch_ascii_03
+    mov bl, 0x0B
+    call xk_print
+    mov rsi, fetch_lbl_vga
+    mov bl, 0x0F
+    call xk_print
+
+    ; --- LÍNEA 4: ARTE + UPTIME SIMULADO ---
+    mov rsi, fetch_ascii_04
+    mov bl, 0x0B
+    call xk_print
+    mov rsi, fetch_lbl_uptime
+    mov bl, 0x0F
+    call xk_print
+
+    ; --- RESTO DEL ARTE ASCII (Bloque inferior) ---
+    mov rsi, fetch_ascii_block
+    mov bl, 0x0B
+    call xk_print
+
+    pop rdi
+    pop rsi
+    ret
+
+; =============================================================================
+; CONSTANTES Y CADENAS DE TEXTO (Alineadas linealmente en .text)
+; =============================================================================
+
+; Formateamos el texto acoplándolo al lado derecho del arte ASCII usando saltos de línea (\n = 10)
+fetch_ascii_01:     db "       ,ok0KK0l.       ", 9, 0
+fetch_lbl_arch:     db "OS/ARCH:  XOS64 Bare-Metal (x86_64 Long Mode)", 10, 0
+
+fetch_ascii_02:     db "      ;#S#             ", 9, 0
+fetch_lbl_bus:      db "BUS:      64-bit Native Paging Mode", 10, 0
+
+fetch_ascii_03:     db "     +###S             ", 9, 0
+fetch_lbl_vga:      db "VIDEO:    VGA Standard Text Mode (0xB8000 MMIO)", 10, 0
+
+fetch_ascii_04:     db "   ,S##+SS             ", 9, 0
+fetch_lbl_uptime:   db "UPTIME:   Estable (Real-Time Pit Clock Active)", 10, 0
+
+; El resto de tu silueta se imprime limpia abajo
+fetch_ascii_block:
+    db "  +##?, SS", 10
+    db ".*##* SS", 10
+    db ":##%.    SS+", 10
+    db ";##%      :S%", 10
+    db " :*###################################SS%*++?%*+**;", 10
+    db "    .*******************S########%********+++%%++++++*%::,", 10
+    db "                       ;SS*", 10
+    db "                      +%SS,", 10
+    db "                      %?S%", 10
+    db "                     ,%%.S?", 10
+    db "                     ?%, S%", 10
+    db "                    *?;  S%", 10
+    db "                   ,%+   ?S:", 10
+    db "                   %?    ;%S", 10
+    db "                  ;?,     ,%%,", 10
+    db "                  ?:       ,?%+.", 10
+    db "                 *+         .;?*?,,", 10
+    db "                 *,            :++++*+..........   .+*", 10
+    db "                ,* .::::;;;;;+++;;;+++++*?SS%:", 10, 0
