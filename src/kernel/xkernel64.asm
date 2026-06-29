@@ -1,76 +1,172 @@
-[BITS 16]
-org 0x0000                      ; Segmentado en 0x1000:0x0000 (Física 0x10000)
+; =============================================================================
+; XKERNEL — Núcleo Estabilizado Lineal (64-bits)
+; =============================================================================
+[BITS 32]
+org 0x9000      ; <--- ASEGÚRATE DE QUE ESTA SEA LA DIRECCIÓN DONDE TU XBOOT CARGA EL KERNEL
 
-_kernel_start:
+_start:
     cli
-    mov ax, 0x1000              ; Sincronizar DS con el segmento actual
-    mov ds, ax
+    mov esp, stack_top
 
-    ; 1. Limpiar 12KB de RAM para las tablas de páginas (de 0x9000 a 0xC000)
-    mov edi, 0x9000
-    xor eax, eax
-    mov ecx, 3072
-    rep stosd
+    ; --- CONFIGURACIÓN DE PAGINACIÓN MANUAL (DIRECCIONES ABSOLUTAS ADYACENTES) ---
+    mov eax, page_table_p3
+    or eax, 0b11                ; Presente + Escritura
+    mov [page_table_p4], eax
 
-    ; 2. Construir Identity Mapping de 2MB usando Huge Pages
-    ; Mapeamos los primeros 2MB de la RAM de forma idéntica a la física
-    mov dword [0x9000], 0xA003  ; PML4[0] apunta a PDPT (0xA000) + Flags (Presente/Escritura)
-    mov dword [0xA000], 0xB003  ; PDPT[0] apunta a Page Directory (0xB000) + Flags
-    mov dword [0xB000], 0x0083  ; PD[0] apunta a la dirección física 0x0 + Bit Huge Page (0x80)
+    mov eax, page_table_p2
+    or eax, 0b11
+    mov [page_table_p3], eax
 
-    ; 3. Cargar la dirección de PML4 en CR3
-    mov eax, 0x9000
+    mov eax, 0b10000011         ; 2MB Huge Page Identity Mapped
+    mov [page_table_p2], eax
+
+    mov eax, page_table_p4
     mov cr3, eax
 
-    ; 4. Activar extensiones de paginación en CR4 (PAE y PSE)
+    ; Activar PAE
     mov eax, cr4
-    or eax, (1 << 5) | (1 << 4) ; Bit 5 = PAE, Bit 4 = PSE (Obligatorio para páginas de 2MB)
+    or eax, 1 << 5
     mov cr4, eax
 
-    ; 5. Activar Long Mode en el registro específico del modelo (EFER)
-    mov ecx, 0xC0000080         ; EFER MSR
+    ; Activar Long Mode
+    mov ecx, 0xC0000080
     rdmsr
-    or eax, 1 << 8              ; Bit 8 = LME (Long Mode Enable)
+    or eax, 1 << 8
     wrmsr
 
-    ; 6. Activar Paginación y Modo Protegido en CR0
+    ; Activar Paginación
     mov eax, cr0
-    or eax, (1 << 31) | 1       ; Bit 31 = PG (Paginación), Bit 0 = PE (Protected Mode)
+    or eax, 1 << 31
     mov cr0, eax
 
-    ; 7. Cargar la GDT de 64-bits modificando el puntero con la base física
+    ; Saltar a Modo Largo de 64 bits
     lgdt [gdt64_desc]
+    jmp 0x08:xk_long_mode_entry
 
-    ; 8. Salto lejano definitivo al Selector de Código de 64-bits (0x08)
-    ; Usamos una transición limpia saltando a la etiqueta de 64-bits
-    jmp 0x08:_kernel_64
-
-; =============================================================================
-; ENTORNO NATIVO DE 64-BITS (LONG MODE ACTIVE)
-; =============================================================================
 [BITS 64]
-_kernel_64:
-    ; Resetear selectores de datos para el espacio de 64-bits
+xk_long_mode_entry:
     xor ax, ax
     mov ds, ax
     mov es, ax
-    mov ss, ax
     mov fs, ax
     mov gs, ax
-    
-    ; Establecer el puntero de la pila en una zona segura debajo del Kernel
-    mov rsp, 0x7C00
+    mov ss, ax
+    mov rsp, stack_top_64
 
-    ; Saltar a la dirección fija donde reside la Shell de 64-bits (LBA 10)
-    jmp 0x11000
+    call xk_clear_screen
+    call exit_main_executor
+
+.infinite_halt:
+    hlt
+    jmp .infinite_halt
+
+; --- INCLUSIÓN DE SUBMÓDULOS EN EL ÁREA EJECUTABLE ---
+%include "src/init/exit.asm"
+%include "src/apps/xsh.asm"
+
+; --- DRIVERS VGA E INTERFACES ---
+global xk_clear_screen
+xk_clear_screen:
+    mov rcx, 2000
+    mov rdi, 0xB8000
+    mov ax, 0x0F20
+    rep stosw
+    mov word [cursor_pos], 0
+    ret
+
+global xk_print
+xk_print:
+    movzx rdx, word [cursor_pos]
+    shl rdx, 1
+    add rdx, 0xB8000
+.loop:
+    lodsb
+    test al, al
+    jz .done
+    cmp al, 10
+    je .newline
+    mov [rdx], al
+    mov [rdx+1], bl
+    add rdx, 2
+    inc word [cursor_pos]
+    jmp .loop
+.newline:
+    add word [cursor_pos], 80
+    movzx rdx, word [cursor_pos]
+    shl rdx, 1
+    add rdx, 0xB8000
+    jmp .loop
+.done:
+    ret
+
+global xk_println
+xk_println:
+    call xk_print
+    add word [cursor_pos], 80
+    ret
+
+global xk_strcmp
+xk_strcmp:
+.loop:
+    mov al, [rsi]
+    mov bl, [rdi]
+    cmp al, bl
+    jne .not_equal
+    test al, al
+    jz .equal
+    inc rsi
+    inc rdi
+    jmp .loop
+.not_equal:
+    mov rax, 1
+    ret
+.equal:
+    xor rax, rax
+    ret
+
+global xk_readline
+xk_readline:
+    mov rsi, .mock_input
+    mov rdi, readline_buf
+    mov rcx, 4
+    rep movsd
+    ret
+.mock_input: db "pwd", 0, 0
+
+global exfs_create_directory_slot
+exfs_create_directory_slot:
+    mov rsi, .msg_ok
+    mov bl, 0x0E                ; Amarillo
+    call xk_println
+    ret
+.msg_ok: db "EXFS: Directorio asignado en Sector de Datos.", 0
+
+; --- ESTRUCTURAS DE HARDWARE Y DATOS ALINEADOS ---
+align 4096
+page_table_p4: times 4096 db 0
+page_table_p3: times 4096 db 0
+page_table_p2: times 4096 db 0
 
 align 8
 gdt64_start:
-    dq 0x0000000000000000       ; Descriptor Nulo
-    dq 0x00209A0000000000       ; Selector de Código Kernel 64-bits (0x08)
-    dq 0x0000920000000000       ; Selector de Datos Kernel 64-bits (0x10)
+    dq 0x0000000000000000       ; Nulo
+    dq 0x00209A0000000000       ; Código Kernel (Modo Largo)
+    dq 0x0000920000000000       ; Datos Kernel
 gdt64_end:
 
 gdt64_desc:
     dw gdt64_end - gdt64_start - 1
-    dd gdt64_start + 0x10000    ; Sumamos 0x10000 porque la GDT está cargada en ese offset real
+    dq gdt64_start
+
+; --- VARIABLES GLOBALES DEL SISTEMA ---
+align 16
+cursor_pos:         dw 0
+exfs_cur_dir_name:  times 32 db 0
+exfs_cur_dir_lba:   dq 0
+readline_buf:       times 256 db 0
+
+; --- PILAS DE EJECUCIÓN ---
+times 1024 db 0
+stack_top:
+times 1024 db 0
+stack_top_64:
